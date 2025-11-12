@@ -1,132 +1,97 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import axios from '../config/axios.js'
+import { UserContext } from '../context/user.context.jsx'
 
-export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+const Login = () => {
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+    const [error, setError] = useState('')
+    const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+    const { setUser } = useContext(UserContext)
+    const navigate = useNavigate()
 
-    try {
-      const response = await fetch('http://localhost:3000/users/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+    function submitHandler(e) {
+        e.preventDefault()
+        setError('')
+        setLoading(true)
 
-      const data = await response.json();
+        axios.post('/users/login', {
+            email,
+            password
+        }).then((res) => {
+            console.log(res.data)
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
+            localStorage.setItem('token', res.data.token)
+            setUser(res.data.user)
 
-      // Store token
-      localStorage.setItem('token', data.token);
-      
-      // Redirect or update UI
-      console.log('Login successful', data);
-      
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+            navigate('/')
+        }).catch((err) => {
+            console.log(err.response?.data)
+            setError(err.response?.data?.error || 'Login failed. Please try again.')
+        }).finally(() => {
+            setLoading(false)
+        })
     }
-  };
 
-  return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-      <div className="max-w-md w-full space-y-8">
-        {/* Header */}
-        <div className="text-center">
-          <h2 className="text-4xl font-bold text-white mb-2">Welcome Back</h2>
-          <p className="text-gray-400">Sign in to your account</p>
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
+            <div className="bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-md">
+                <h2 className="text-2xl font-bold text-white mb-6">Login</h2>
+                
+                {error && (
+                    <div className="mb-4 p-3 rounded bg-red-900/50 border border-red-500 text-red-200">
+                        {error}
+                    </div>
+                )}
+
+                <form onSubmit={submitHandler}>
+                    <div className="mb-4">
+                        <label className="block text-gray-400 mb-2" htmlFor="email">
+                            Email
+                        </label>
+                        <input
+                            onChange={(e) => setEmail(e.target.value)}
+                            value={email}
+                            type="email"
+                            id="email"
+                            required
+                            className="w-full p-3 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter your email"
+                        />
+                    </div>
+                    <div className="mb-6">
+                        <label className="block text-gray-400 mb-2" htmlFor="password">
+                            Password
+                        </label>
+                        <input
+                            onChange={(e) => setPassword(e.target.value)}
+                            value={password}
+                            type="password"
+                            id="password"
+                            required
+                            className="w-full p-3 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter your password"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full p-3 rounded bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed transition"
+                    >
+                        {loading ? 'Logging in...' : 'Login'}
+                    </button>
+                </form>
+                <p className="text-gray-400 mt-4">
+                    Don't have an account?{' '}
+                    <Link to="/register" className="text-blue-500 hover:underline">
+                        Create one
+                    </Link>
+                </p>
+            </div>
         </div>
-
-        {/* Form Container */}
-        <div className="mt-8 space-y-6 bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700">
-          {error && (
-            <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          <div className="space-y-4">
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
-
-          {/* Remember & Forgot */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember"
-                type="checkbox"
-                className="h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500"
-              />
-              <label htmlFor="remember" className="ml-2 block text-sm text-gray-300">
-                Remember me
-              </label>
-            </div>
-            <a href="#" className="text-sm text-blue-400 hover:text-blue-300">
-              Forgot password?
-            </a>
-          </div>
-
-          {/* Submit Button */}
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-
-          {/* Sign Up Link */}
-          <div className="text-center">
-            <p className="text-gray-400">
-              Don't have an account?{' '}
-              <a href="/register" className="text-blue-400 hover:text-blue-300 font-medium">
-                Sign up
-              </a>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    )
 }
+
+export default Login

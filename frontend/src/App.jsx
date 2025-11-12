@@ -1,8 +1,11 @@
-import AppRoutes from './routes/AppRoutes.jsx'
+import { UserProvider } from './context/user.context'
+import AppRoutes from './routes/AppRoutes'
 
 const App = () => {
   return (
-    <AppRoutes />
+    <UserProvider>
+      <AppRoutes />
+    </UserProvider>
   )
 }
 

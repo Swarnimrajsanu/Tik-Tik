@@ -1,7 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import Home from '../screens/Home'
-import Login from '../screens/login'
-import Register from '../screens/register'
+import Login from '../screens/login.jsx'
+import Register from '../screens/register.jsx'
 
 const AppRoutes = () => {
   return (

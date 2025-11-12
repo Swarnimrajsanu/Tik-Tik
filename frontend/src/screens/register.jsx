@@ -1,166 +1,76 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import axios from '../config/axios'
+import { UserContext } from '../context/user.context'
 
-export default function Register() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+const Register = () => {
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
+    const [ email, setEmail ] = useState('')
+    const [ password, setPassword ] = useState('')
 
-    // Validate passwords match
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
+    const { setUser } = useContext(UserContext)
+
+    const navigate = useNavigate()
+
+
+    function submitHandler(e) {
+
+        e.preventDefault()
+
+        axios.post('/users/register', {
+            email,
+            password
+        }).then((res) => {
+            console.log(res.data)
+            localStorage.setItem('token', res.data.token)
+            setUser(res.data.user)
+            navigate('/')
+        }).catch((err) => {
+            console.log(err.response.data)
+        })
     }
 
-    // Validate password length
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
 
-    setLoading(true);
-
-    try {
-      const response = await fetch('http://localhost:3000/users/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
-      }
-
-      // Store token
-      localStorage.setItem('token', data.token);
-      
-      // Redirect or update UI
-      console.log('Registration successful', data);
-      
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-      <div className="max-w-md w-full space-y-8">
-        {/* Header */}
-        <div className="text-center">
-          <h2 className="text-4xl font-bold text-white mb-2">Create Account</h2>
-          <p className="text-gray-400">Sign up to get started</p>
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-900">
+            <div className="bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-md">
+                <h2 className="text-2xl font-bold text-white mb-6">Register</h2>
+                <form
+                    onSubmit={submitHandler}
+                >
+                    <div className="mb-4">
+                        <label className="block text-gray-400 mb-2" htmlFor="email">Email</label>
+                        <input
+                            onChange={(e) => setEmail(e.target.value)}
+                            type="email"
+                            id="email"
+                            className="w-full p-3 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter your email"
+                        />
+                    </div>
+                    <div className="mb-6">
+                        <label className="block text-gray-400 mb-2" htmlFor="password">Password</label>
+                        <input
+                            onChange={(e) => setPassword(e.target.value)} s
+                            type="password"
+                            id="password"
+                            className="w-full p-3 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Enter your password"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        className="w-full p-3 rounded bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        Register
+                    </button>
+                </form>
+                <p className="text-gray-400 mt-4">
+                    Already have an account? <Link to="/login" className="text-blue-500 hover:underline">Login</Link>
+                </p>
+            </div>
         </div>
-
-        {/* Form Container */}
-        <div className="mt-8 space-y-6 bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700">
-          {error && (
-            <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          <div className="space-y-4">
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="••••••••"
-              />
-              <p className="mt-1 text-xs text-gray-400">Must be at least 6 characters</p>
-            </div>
-
-            {/* Confirm Password */}
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
-                Confirm Password
-              </label>
-              <input
-                id="confirmPassword"
-                type="password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
-
-          {/* Terms & Conditions */}
-          <div className="flex items-start">
-            <input
-              id="terms"
-              type="checkbox"
-              required
-              className="h-4 w-4 mt-1 bg-gray-700 border-gray-600 rounded text-blue-500 focus:ring-blue-500"
-            />
-            <label htmlFor="terms" className="ml-2 block text-sm text-gray-300">
-              I agree to the{' '}
-              <a href="#" className="text-blue-400 hover:text-blue-300">
-                Terms and Conditions
-              </a>
-              {' '}and{' '}
-              <a href="#" className="text-blue-400 hover:text-blue-300">
-                Privacy Policy
-              </a>
-            </label>
-          </div>
-
-          {/* Submit Button */}
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
-          >
-            {loading ? 'Creating Account...' : 'Create Account'}
-          </button>
-
-          {/* Login Link */}
-          <div className="text-center">
-            <p className="text-gray-400">
-              Already have an account?{' '}
-              <a href="/login" className="text-blue-400 hover:text-blue-300 font-medium">
-                Sign in
-              </a>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    )
 }
+
+export default Register
