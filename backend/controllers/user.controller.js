@@ -1,4 +1,5 @@
 import { validationResult } from "express-validator";
+import redisClient from "../services/radis.service.js";
 import * as userService from "../services/user.service.js";
 
 
@@ -47,4 +48,30 @@ export const profileController = async(req, res) => {
     res.status(200).json({
         user: req.user
     });
+}
+
+export const logoutController = async(req, res) => {
+    try {
+        // Safely access cookies and authorization header
+        const token = (req.cookies && req.cookies.token) ||
+            (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+
+        if (!token) {
+            return res.status(401).json({ error: "No token provided" });
+        }
+
+        // Blacklist the token in Redis
+        await redisClient.set(token, 'logout', 'EX', 60 * 60 * 24);
+
+        // Clear the cookie if cookies are available
+        if (req.cookies && req.cookies.token) {
+            res.clearCookie('token');
+        }
+
+        res.status(200).json({ message: "Logout Successful" });
+
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: err.message });
+    }
 }
