@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import projectModel from "../models/project.models.js";
 
 export const createProject = async({ name, userId }) => {

@@ -1,4 +1,5 @@
 import { validationResult } from "express-validator";
+import userModel from "../models/user.model.js";
 import redisClient from "../services/radis.service.js";
 import * as userService from "../services/user.service.js";
 
@@ -23,26 +24,29 @@ export const createUser = async(req, res) => {
 
 
 export const logincontroller = async(req, res) => {
-    const errors = validationResult(req)
+    const errors = validationResult(req);
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
     }
+
     try {
         const { email, password } = req.body;
-        const user = await userService.findUserByEmail(email);
-        if (!user) {
+        const user = await userModel.findOne({ email }).select('+password');
+
+        if (!user || !(await user.isValidPassword(password))) {
             return res.status(401).json({ error: "Invalid email or password" });
         }
-        const isMatched = await user.isValidPassword(password);
-        if (!isMatched) {
-            return res.status(401).json({ error: "Invalid email or password" });
-        }
+
         const token = await user.generateJWT();
-        res.status(200).json({ token });
+
+        const userWithoutPassword = {...user._doc };
+        delete userWithoutPassword.password;
+
+        res.status(200).json({ user: userWithoutPassword, token });
     } catch (error) {
         res.status(500).json({ error: error.message });
-    };
-}
+    }
+};
 
 
 export const profileController = async(req, res) => {
@@ -77,3 +81,15 @@ export const logoutController = async(req, res) => {
         res.status(500).json({ error: err.message });
     }
 }
+
+export const getAllUsersController = async(req, res) => {
+    try {
+        const loggedInUser = await userModel.findOne({ email: req.user.email });
+        const allUsers = await userService.getAllUsers(loggedInUser._id);
+
+        res.status(200).json({ users: allUsers });
+    } catch (err) {
+        console.error(err);
+        res.status(400).json({ error: err.message });
+    }
+};

@@ -19,7 +19,14 @@ export const generateToken = (user) => {
     return user.generateJWT();
 }
 
-export const findUserByEmail = async(email) => {
-    const user = await userModel.findOne({ email }).select('+password');
-    return user;
-}
+// export const findUserByEmail = async(email) => {
+//     const user = await userModel.findOne({ email }).select('+password');
+//     return user;
+// }
+
+export const getAllUsers = async(userId) => {
+    const users = await userModel
+        .find({ _id: { $ne: userId } })
+        .select("-password -__v"); // exclude sensitive fields
+    return users;
+};
