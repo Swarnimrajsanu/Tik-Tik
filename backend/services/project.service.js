@@ -90,3 +90,58 @@ export const addUsersToProject = async({ projectId, users, userId }) => {
 
 
 }
+
+export const getProjectById = async({ projectId }) => {
+    if (!projectId) {
+        throw new Error("projectId is required");
+    }
+
+    // ✅ Correct validation
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+        throw new Error("Invalid projectId");
+    }
+
+    const project = await projectModel
+        .findById(projectId)
+        .populate("users", "-password -__v"); // Hide sensitive fields
+
+    if (!project) {
+        throw new Error("Project not found");
+    }
+
+    return project;
+};
+
+export const updateFileTree = async({ projectId, fileTree, userId }) => {
+    if (!projectId) {
+        throw new Error("projectId is required");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+        throw new Error("Invalid projectId");
+    }
+
+    if (!userId) {
+        throw new Error("userId is required");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new Error("Invalid userId");
+    }
+
+    // Check if user belongs to project
+    const project = await projectModel.findOne({
+        _id: projectId,
+        users: userId
+    });
+
+    if (!project) {
+        throw new Error("User does not belong to this project");
+    }
+
+    const updatedProject = await projectModel.findByIdAndUpdate(
+        projectId, { fileTree }, { new: true }
+    ).populate("users", "-password -__v");
+
+    return updatedProject;
+};

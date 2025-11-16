@@ -14,8 +14,9 @@ export const createUser = async(req, res) => {
 
         const token = await userService.generateToken(user);
 
-        delete user._doc.password;
-        res.status(201).json(user, token);
+        const userWithoutPassword = {...user._doc };
+        delete userWithoutPassword.password;
+        res.status(201).json({ user: userWithoutPassword, token });
     } catch (error) {
         res.status(500).json({ error: error.message });
     };

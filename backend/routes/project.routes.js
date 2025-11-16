@@ -22,4 +22,16 @@ router.put('/add-user', authMiddleware.authUser,
     .custom((users) => users.every(user => typeof user === 'string')).withMessage('Each user must be a string'),
     projectController.addUserToProject)
 
+router.get('/get-project/:projectId',
+    authMiddleware.authUser,
+    projectController.getProjectById
+)
+
+router.put('/update-file-tree',
+    authMiddleware.authUser,
+    body('projectId').isString().withMessage('Project ID is required'),
+    body('fileTree').exists().withMessage('File tree is required'),
+    projectController.updateFileTree
+)
+
 export default router;

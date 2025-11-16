@@ -1,7 +1,12 @@
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import './index.css'
 import App from './App.jsx'
+import './index.css'
+
+// Make hljs available globally
+window.hljs = hljs;
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

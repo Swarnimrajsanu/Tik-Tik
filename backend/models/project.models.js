@@ -1,4 +1,5 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
+import "./user.model.js"; // ✅ make sure User schema is registered
 
 const projectSchema = new mongoose.Schema({
     name: {
@@ -6,14 +7,19 @@ const projectSchema = new mongoose.Schema({
         required: true,
         trim: true,
         lowercase: true,
-        unique: [true, 'Project name already exists']
+        unique: [true, "Project name already exists"],
     },
     users: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    }]
-})
+        ref: "User", // ✅ must match mongoose.model("User", userSchema)
+    }, ],
+    fileTree: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
+    }
+}, { timestamps: true });
 
-const Project = mongoose.model('project', projectSchema);
+// ✅ Capitalize model name for consistency
+const Project = mongoose.model("Project", projectSchema);
 
 export default Project;

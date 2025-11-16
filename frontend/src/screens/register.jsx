@@ -7,6 +7,8 @@ const Register = () => {
 
     const [ email, setEmail ] = useState('')
     const [ password, setPassword ] = useState('')
+    const [ error, setError ] = useState('')
+    const [ loading, setLoading ] = useState(false)
 
     const { setUser } = useContext(UserContext)
 
@@ -16,6 +18,8 @@ const Register = () => {
     function submitHandler(e) {
 
         e.preventDefault()
+        setError('')
+        setLoading(true)
 
         axios.post('/users/register', {
             email,
@@ -26,15 +30,25 @@ const Register = () => {
             setUser(res.data.user)
             navigate('/')
         }).catch((err) => {
-            console.log(err.response.data)
+            console.log(err.response?.data)
+            setError(err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Registration failed. Please try again.')
+        }).finally(() => {
+            setLoading(false)
         })
     }
 
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
             <div className="bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-md">
                 <h2 className="text-2xl font-bold text-white mb-6">Register</h2>
+                
+                {error && (
+                    <div className="mb-4 p-3 rounded bg-red-900/50 border border-red-500 text-red-200">
+                        {error}
+                    </div>
+                )}
+
                 <form
                     onSubmit={submitHandler}
                 >
@@ -51,7 +65,7 @@ const Register = () => {
                     <div className="mb-6">
                         <label className="block text-gray-400 mb-2" htmlFor="password">Password</label>
                         <input
-                            onChange={(e) => setPassword(e.target.value)} s
+                            onChange={(e) => setPassword(e.target.value)}
                             type="password"
                             id="password"
                             className="w-full p-3 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -60,9 +74,10 @@ const Register = () => {
                     </div>
                     <button
                         type="submit"
-                        className="w-full p-3 rounded bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={loading}
+                        className="w-full p-3 rounded bg-blue-500 text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed transition"
                     >
-                        Register
+                        {loading ? 'Registering...' : 'Register'}
                     </button>
                 </form>
                 <p className="text-gray-400 mt-4">

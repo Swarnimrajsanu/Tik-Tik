@@ -1,6 +1,8 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import UserAuth from '../auth/UserAuth'
 import Home from '../screens/Home'
 import Login from '../screens/login.jsx'
+import Project from '../screens/project.jsx'
 import Register from '../screens/register.jsx'
 
 const AppRoutes = () => {
@@ -8,9 +10,10 @@ const AppRoutes = () => {
     <div>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home/>} />
           <Route path="/login" element={<Login/>} />
           <Route path="/register" element={<Register/>} />
+          <Route path="/" element={<UserAuth><Home/></UserAuth>} />
+          <Route path="/project" element={<UserAuth><Project/></UserAuth>} />
         </Routes>
       </BrowserRouter>
     </div>
