@@ -15,7 +15,7 @@ connect();
 
 const app = express();
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: 'https://tik-tik-chat.onrender.com',
     credentials: true
 }));
 
