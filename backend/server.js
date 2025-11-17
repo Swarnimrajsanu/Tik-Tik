@@ -13,17 +13,17 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: process.env.FRONTEND_URL || '*',
+        origin: process.env.FRONTEND_URL || 'https://tik-tik-chat.onrender.com',
         credentials: true
     }
 });
 
 // Socket.io authentication middleware
-io.use(async (socket, next) => {
+io.use(async(socket, next) => {
     try {
         // Extract token
-        const token = socket.handshake.auth?.token || 
-                     socket.handshake.headers.authorization?.split(' ')[1];
+        const token = socket.handshake.auth ?.token ||
+            socket.handshake.headers.authorization ?.split(' ')[1];
 
         if (!token) {
             return next(new Error('Authentication token required'));
@@ -42,7 +42,7 @@ io.use(async (socket, next) => {
 
         // Verify JWT token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
+
         if (!decoded) {
             return next(new Error('Invalid token'));
         }
@@ -111,7 +111,7 @@ io.on('connection', (socket) => {
     socket.join(socket.roomId);
 
     // Handle project messages
-    socket.on('project-message', async (data) => {
+    socket.on('project-message', async(data) => {
         try {
             const { message } = data;
 
@@ -137,9 +137,9 @@ io.on('connection', (socket) => {
                 console.log(`🤖 AI prompt received: ${prompt}`);
 
                 // Emit AI thinking status
-                io.to(socket.roomId).emit('ai-status', { 
+                io.to(socket.roomId).emit('ai-status', {
                     status: 'thinking',
-                    message: 'AI is processing your request...' 
+                    message: 'AI is processing your request...'
                 });
 
                 try {
@@ -166,25 +166,23 @@ io.on('connection', (socket) => {
                     // Update project with new fileTree if present
                     if (parsedResult.fileTree) {
                         await projectModel.findByIdAndUpdate(
-                            socket.project._id,
-                            { fileTree: parsedResult.fileTree },
-                            { new: true }
+                            socket.project._id, { fileTree: parsedResult.fileTree }, { new: true }
                         );
                         console.log(`📁 FileTree updated for project ${socket.roomId}`);
                     }
 
                     // Emit AI completion status
-                    io.to(socket.roomId).emit('ai-status', { 
+                    io.to(socket.roomId).emit('ai-status', {
                         status: 'complete',
-                        message: 'AI has completed the request' 
+                        message: 'AI has completed the request'
                     });
 
                 } catch (aiError) {
                     console.error('AI generation error:', aiError);
-                    
+
                     io.to(socket.roomId).emit('project-message', {
-                        message: JSON.stringify({ 
-                            text: 'Sorry, I encountered an error processing your request. Please try again.' 
+                        message: JSON.stringify({
+                            text: 'Sorry, I encountered an error processing your request. Please try again.'
                         }),
                         sender: {
                             _id: 'ai',
@@ -192,9 +190,9 @@ io.on('connection', (socket) => {
                         }
                     });
 
-                    io.to(socket.roomId).emit('ai-status', { 
+                    io.to(socket.roomId).emit('ai-status', {
                         status: 'error',
-                        message: 'AI encountered an error' 
+                        message: 'AI encountered an error'
                     });
                 }
             }
