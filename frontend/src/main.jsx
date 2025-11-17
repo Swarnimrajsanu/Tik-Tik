@@ -1,5 +1,5 @@
 import hljs from 'highlight.js'
-import 'highlight.js/styles/github.css'
+import 'highlight.js/styles/atom-one-dark.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'

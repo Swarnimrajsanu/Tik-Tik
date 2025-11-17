@@ -51,10 +51,26 @@ export const logincontroller = async(req, res) => {
 
 
 export const profileController = async(req, res) => {
-    console.log(req.user);
-    res.status(200).json({
-        user: req.user
-    });
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: "User not authenticated" });
+        }
+
+        // Fetch full user data from database to ensure we have the latest info
+        const user = await userModel.findById(req.user._id || req.user.id).select('-password');
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        res.status(200).json({
+            success: true,
+            user: user
+        });
+    } catch (error) {
+        console.error("Profile controller error:", error);
+        res.status(500).json({ error: error.message || "Failed to fetch user profile" });
+    }
 }
 
 export const logoutController = async(req, res) => {

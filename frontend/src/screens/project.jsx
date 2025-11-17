@@ -1,12 +1,11 @@
-import hljs from 'highlight.js'
 import Markdown from 'markdown-to-jsx'
 import React, { useContext, useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import CodePlayground from '../components/CodePlayground.jsx'
 import axios from '../config/axios.js'
 import { initializeSocket, receiveMessage, sendMessage } from '../config/socket.js'
 import { getWebContainer } from '../config/webContainer.js'
 import { UserContext } from '../context/user.context.jsx'
-
 
 function SyntaxHighlightedCode(props) {
     const ref = useRef(null)
@@ -14,129 +13,211 @@ function SyntaxHighlightedCode(props) {
     React.useEffect(() => {
         if (ref.current && props.className?.includes('lang-') && window.hljs) {
             window.hljs.highlightElement(ref.current)
-
-            // hljs won't reprocess the element unless this attribute is removed
             ref.current.removeAttribute('data-highlighted')
         }
-    }, [ props.className, props.children ])
+    }, [props.className, props.children])
 
     return <code {...props} ref={ref} />
 }
 
+function JSONFormatter({ jsonString }) {
+    try {
+        const parsed = JSON.parse(jsonString)
+        const formatted = JSON.stringify(parsed, null, 2)
+        
+        return (
+            <pre className="json-formatter bg-gray-900 rounded-lg p-4 overflow-x-auto">
+                <code 
+                    className="language-json text-sm"
+                    dangerouslySetInnerHTML={{
+                        __html: window.hljs ? window.hljs.highlight(formatted, { language: 'json' }).value : formatted
+                    }}
+                />
+            </pre>
+        )
+    } catch (e) {
+        return <pre className="text-red-400 text-sm">{jsonString}</pre>
+    }
+}
 
-const Project = () => {
+function HighlightedText({ text, children }) {
+    const textContent = typeof text === 'string' ? text : 
+                       (typeof children === 'string' ? children : 
+                       (Array.isArray(children) ? children.join('') : 
+                       (children ? String(children) : '')))
 
-    const location = useLocation()
+    if (!textContent) return <>{children}</>
 
-    const [ isSidePanelOpen, setIsSidePanelOpen ] = useState(false)
-    const [ isModalOpen, setIsModalOpen ] = useState(false)
-    const [ selectedUserId, setSelectedUserId ] = useState(new Set()) // Initialized as Set
-    const [ project, setProject ] = useState(location.state?.project || null)
-    const [ message, setMessage ] = useState('')
-    const { user } = useContext(UserContext)
-    const messageBox = React.createRef()
+    const keywordPatterns = [
+        { pattern: /\b(function|const|let|var|if|else|for|while|return|async|await|import|export|class|extends|super|this|new|try|catch|finally|throw|Promise)\b/g, color: '#c678dd', className: 'keyword' },
+        { pattern: /\b(true|false|null|undefined)\b/g, color: '#e06c75', className: 'literal' },
+        { pattern: /\b\d+\.?\d*\b/g, color: '#d19a66', className: 'number' },
+        { pattern: /"[^"]*":/g, color: '#61afef', className: 'json-key' },
+        { pattern: /:\s*"[^"]*"/g, color: '#98c379', className: 'json-string' },
+        { pattern: /\b(fileTree|file|contents|directory|name|type|path|extension)\b/g, color: '#56b6c2', className: 'property' },
+        { pattern: /\b(React|Component|useState|useEffect|props|state)\b/g, color: '#61afef', className: 'react-keyword' },
+    ]
 
-    const [ users, setUsers ] = useState([])
-    const [ messages, setMessages ] = useState([]) // New state variable for messages
-    const [ fileTree, setFileTree ] = useState({})
+    const parts = []
+    let lastIndex = 0
+    const matches = []
 
-    const [ currentFile, setCurrentFile ] = useState(null)
-    const [ openFiles, setOpenFiles ] = useState([])
+    keywordPatterns.forEach(({ pattern, color, className }) => {
+        let match
+        pattern.lastIndex = 0
+        while ((match = pattern.exec(textContent)) !== null) {
+            matches.push({
+                start: match.index,
+                end: match.index + match[0].length,
+                text: match[0],
+                color,
+                className
+            })
+        }
+    })
 
-    const [ webContainer, setWebContainer ] = useState(null)
-    const [ iframeUrl, setIframeUrl ] = useState(null)
+    matches.sort((a, b) => a.start - b.start)
 
-    const [ runProcess, setRunProcess ] = useState(null)
+    const nonOverlapping = []
+    matches.forEach(match => {
+        if (nonOverlapping.length === 0 || match.start >= nonOverlapping[nonOverlapping.length - 1].end) {
+            nonOverlapping.push(match)
+        }
+    })
 
-    const handleUserClick = (id) => {
-        setSelectedUserId(prevSelectedUserId => {
-            const newSelectedUserId = new Set(prevSelectedUserId);
-            if (newSelectedUserId.has(id)) {
-                newSelectedUserId.delete(id);
-            } else {
-                newSelectedUserId.add(id);
-            }
+    nonOverlapping.forEach(match => {
+        if (match.start > lastIndex) {
+            parts.push({ text: textContent.substring(lastIndex, match.start), isHighlight: false })
+        }
+        parts.push({ text: match.text, isHighlight: true, color: match.color, className: match.className })
+        lastIndex = match.end
+    })
 
-            return newSelectedUserId;
-        });
-
-
+    if (lastIndex < textContent.length) {
+        parts.push({ text: textContent.substring(lastIndex), isHighlight: false })
     }
 
+    return (
+        <span>
+            {parts.map((part, index) => 
+                part.isHighlight ? (
+                    <span 
+                        key={index} 
+                        style={{ color: part.color, fontWeight: '600' }}
+                        className={`highlight-${part.className}`}
+                    >
+                        {part.text}
+                    </span>
+                ) : (
+                    <span key={index}>{part.text}</span>
+                )
+            )}
+        </span>
+    )
+}
 
-    function addCollaborators() {
+const Project = () => {
+    const location = useLocation()
+    const [isSidePanelOpen, setIsSidePanelOpen] = useState(false)
+    const [isModalOpen, setIsModalOpen] = useState(false)
+    const [selectedUserId, setSelectedUserId] = useState(new Set())
+    const [project, setProject] = useState(location.state?.project || null)
+    const [message, setMessage] = useState('')
+    const [users, setUsers] = useState([])
+    const [messages, setMessages] = useState([])
+    const [fileTree, setFileTree] = useState({})
+    const { user } = useContext(UserContext)
+    const messageBox = useRef(null)
 
+    const handleUserClick = (id) => {
+        setSelectedUserId(prev => {
+            const newSet = new Set(prev)
+            if (newSet.has(id)) {
+                newSet.delete(id)
+            } else {
+                newSet.add(id)
+            }
+            return newSet
+        })
+    }
+
+    const addCollaborators = () => {
         if (!project?._id) return
 
         axios.put("/projects/add-user", {
             projectId: project._id,
             users: Array.from(selectedUserId)
-        }).then(res => {
-            console.log(res.data)
+        }).then(() => {
             setIsModalOpen(false)
             setSelectedUserId(new Set())
-            // Refresh project data
-            axios.get(`/projects/get-project/${project._id}`).then(res => {
-                setProject(res.data.project)
-            }).catch(err => {
-                console.error('Failed to refresh project:', err)
-            })
-        }).catch(err => {
-            console.log(err)
-        })
-
+            axios.get(`/projects/get-project/${project._id}`)
+                .then(res => setProject(res.data.project))
+                .catch(() => {})
+        }).catch(() => {})
     }
 
     const send = () => {
-
         sendMessage('project-message', {
             message,
             sender: user
         })
-        setMessages(prevMessages => [ ...prevMessages, { sender: user, message } ]) // Update messages state
+        setMessages(prev => [...prev, { sender: user, message }])
         setMessage("")
-
     }
 
-    function WriteAiMessage(message) {
+    const WriteAiMessage = (message) => {
         try {
-            // Handle both string and already parsed objects
-            let messageObject;
+            let messageObject
+            let isJSON = false
+            
             if (typeof message === 'string') {
                 try {
-                    messageObject = JSON.parse(message);
-                } catch (e) {
-                    // If it's not valid JSON, treat it as plain text
-                    messageObject = { text: message };
+                    messageObject = JSON.parse(message)
+                    isJSON = true
+                } catch {
+                    messageObject = { text: message }
                 }
             } else {
-                messageObject = message;
+                messageObject = message
+                isJSON = true
             }
 
-            // Extract text content - ensure it's always a string
-            let textContent = '';
+            let textContent = ''
             if (typeof messageObject === 'string') {
-                textContent = messageObject;
-            } else if (messageObject && typeof messageObject.text === 'string') {
-                textContent = messageObject.text;
-            } else if (messageObject && typeof messageObject === 'object') {
-                // If it's an object without a text property, stringify it
-                textContent = JSON.stringify(messageObject, null, 2);
+                textContent = messageObject
+            } else if (messageObject?.text) {
+                textContent = messageObject.text
+            } else if (typeof messageObject === 'object') {
+                textContent = JSON.stringify(messageObject, null, 2)
+                isJSON = true
             } else {
-                textContent = String(messageObject || '');
+                textContent = String(messageObject || '')
             }
 
-            // Ensure textContent is a string
             if (typeof textContent !== 'string') {
-                textContent = String(textContent);
+                textContent = String(textContent)
+            }
+
+            if (!isJSON) {
+                try {
+                    JSON.parse(textContent)
+                    isJSON = true
+                } catch {
+                    isJSON = false
+                }
+            }
+
+            if (isJSON && (textContent.trim().startsWith('{') || textContent.trim().startsWith('['))) {
+                return (
+                    <div className='overflow-auto rounded-lg p-0'>
+                        <JSONFormatter jsonString={textContent} />
+                    </div>
+                )
             }
 
             return (
-                <div
-                    className='overflow-auto bg-white text-gray-900 rounded-sm p-3 border-2 border-gray-300 shadow-sm'
-                    style={{ color: '#111827', backgroundColor: '#ffffff' }}
-                >
-                    <div style={{ color: '#111827' }}>
+                <div className='overflow-auto bg-gradient-to-br from-gray-50 to-white text-gray-900 rounded-lg p-4 border border-gray-200 shadow-sm'>
+                    <div className="prose prose-sm max-w-none">
                         <Markdown
                             children={textContent}
                             options={{
@@ -144,422 +225,269 @@ const Project = () => {
                                     code: {
                                         component: SyntaxHighlightedCode,
                                         props: {
-                                            className: 'bg-gray-200 text-gray-800 px-1 py-0.5 rounded text-xs font-mono',
-                                            style: { backgroundColor: '#e5e7eb', color: '#1f2937' }
+                                            className: 'language-javascript bg-gray-900 text-gray-100 px-2 py-1 rounded text-xs font-mono',
                                         }
                                     },
                                     pre: {
                                         component: 'pre',
                                         props: {
-                                            className: 'bg-gray-200 text-gray-800 p-2 rounded overflow-x-auto my-2',
-                                            style: { backgroundColor: '#e5e7eb', color: '#1f2937' }
+                                            className: 'bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto my-3 shadow-lg border border-gray-700',
                                         }
                                     },
                                     p: {
-                                        component: 'p',
-                                        props: {
-                                            className: 'mb-2 text-gray-900',
-                                            style: { color: '#111827', marginBottom: '0.5rem' }
+                                        component: ({ children, ...props }) => {
+                                            const text = Array.isArray(children) ? children.join('') : String(children || '')
+                                            return (
+                                                <p {...props} className="mb-3 text-gray-800 leading-relaxed">
+                                                    <HighlightedText text={text} />
+                                                </p>
+                                            )
                                         }
                                     },
                                     h1: {
                                         component: 'h1',
                                         props: {
-                                            className: 'text-xl font-bold mb-2 text-gray-900',
-                                            style: { color: '#111827', fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }
+                                            className: 'text-2xl font-bold mb-3 text-indigo-700 border-b-2 border-indigo-200 pb-2',
                                         }
                                     },
                                     h2: {
                                         component: 'h2',
                                         props: {
-                                            className: 'text-lg font-bold mb-2 text-gray-900',
-                                            style: { color: '#111827', fontSize: '1.125rem', fontWeight: 'bold', marginBottom: '0.5rem' }
+                                            className: 'text-xl font-bold mb-2 text-blue-700 mt-4',
                                         }
                                     },
                                     h3: {
                                         component: 'h3',
                                         props: {
-                                            className: 'text-base font-bold mb-2 text-gray-900',
-                                            style: { color: '#111827', fontSize: '1rem', fontWeight: 'bold', marginBottom: '0.5rem' }
+                                            className: 'text-lg font-bold mb-2 text-purple-700 mt-3',
                                         }
                                     },
                                     ul: {
                                         component: 'ul',
                                         props: {
-                                            className: 'list-disc list-inside mb-2 text-gray-900',
-                                            style: { color: '#111827', marginBottom: '0.5rem' }
+                                            className: 'list-disc list-inside mb-3 text-gray-800 space-y-1 ml-4',
                                         }
                                     },
                                     ol: {
                                         component: 'ol',
                                         props: {
-                                            className: 'list-decimal list-inside mb-2 text-gray-900',
-                                            style: { color: '#111827', marginBottom: '0.5rem' }
+                                            className: 'list-decimal list-inside mb-3 text-gray-800 space-y-1 ml-4',
                                         }
                                     },
                                     li: {
-                                        component: 'li',
-                                        props: {
-                                            className: 'mb-1 text-gray-900',
-                                            style: { color: '#111827', marginBottom: '0.25rem' }
+                                        component: ({ children, ...props }) => {
+                                            const text = Array.isArray(children) ? children.join('') : String(children || '')
+                                            return (
+                                                <li {...props} className="mb-1 text-gray-800">
+                                                    <HighlightedText text={text} />
+                                                </li>
+                                            )
                                         }
                                     },
                                     strong: {
                                         component: 'strong',
                                         props: {
-                                            className: 'font-bold text-gray-900',
-                                            style: { color: '#111827', fontWeight: 'bold' }
+                                            className: 'font-bold text-indigo-700',
                                         }
                                     },
                                     em: {
                                         component: 'em',
                                         props: {
-                                            className: 'italic text-gray-900',
-                                            style: { color: '#111827', fontStyle: 'italic' }
+                                            className: 'italic text-purple-600',
                                         }
                                     },
-                                    div: {
-                                        component: 'div',
+                                    blockquote: {
+                                        component: 'blockquote',
                                         props: {
-                                            style: { color: '#111827' }
-                                        }
-                                    },
-                                    span: {
-                                        component: 'span',
-                                        props: {
-                                            style: { color: '#111827' }
+                                            className: 'border-l-4 border-blue-500 pl-4 italic text-gray-700 my-3 bg-blue-50 py-2 rounded-r',
                                         }
                                     }
                                 },
                             }}
                         />
                     </div>
-                </div>)
+                </div>
+            )
         } catch (error) {
-            console.error('Error parsing AI message:', error, message)
             return (
-                <div
-                    className='overflow-auto bg-white text-gray-900 rounded-sm p-3 border-2 border-gray-300 shadow-sm'
-                    style={{ color: '#111827', backgroundColor: '#ffffff' }}
-                >
-                    <p style={{ color: '#111827' }}>{typeof message === 'string' ? message : JSON.stringify(message)}</p>
+                <div className='overflow-auto bg-red-50 text-red-900 rounded-lg p-4 border-2 border-red-300 shadow-sm'>
+                    <p className="font-mono text-sm">
+                        {typeof message === 'string' ? message : JSON.stringify(message, null, 2)}
+                    </p>
                 </div>
             )
         }
     }
 
     useEffect(() => {
-        if (!project?._id) {
-            return
-        }
+        if (!project?._id) return
 
         initializeSocket(project._id)
 
-        if (!webContainer) {
-            getWebContainer().then(container => {
-                setWebContainer(container)
-                console.log("container started")
-            })
-        }
-
+        getWebContainer().then(container => {
+            container.mount(fileTree)
+        })
 
         receiveMessage('project-message', data => {
-
-            console.log(data)
-            
-            if (data.sender._id == 'ai') {
-
-
-                const message = JSON.parse(data.message)
-
-                console.log(message)
-
-                webContainer?.mount(message.fileTree)
-
-                if (message.fileTree) {
-                    setFileTree(message.fileTree || {})
+            if (data.sender._id === 'ai') {
+                try {
+                    const message = JSON.parse(data.message)
+                    if (message.fileTree) {
+                        setFileTree(message.fileTree)
+                        getWebContainer().then(container => {
+                            container.mount(message.fileTree)
+                        })
+                    }
+                } catch {
+                    // Invalid JSON, treat as regular message
                 }
-                setMessages(prevMessages => [ ...prevMessages, data ]) // Update messages state
-            } else {
-
-
-                setMessages(prevMessages => [ ...prevMessages, data ]) // Update messages state
             }
+            setMessages(prev => [...prev, data])
         })
-
 
         if (location.state?.project?._id) {
-            axios.get(`/projects/get-project/${location.state.project._id}`).then(res => {
-
-                console.log(res.data.project)
-
-                setProject(res.data.project)
-                setFileTree(res.data.project.fileTree || {})
-            }).catch(err => {
-                console.error('Failed to fetch project:', err)
-            })
+            axios.get(`/projects/get-project/${location.state.project._id}`)
+                .then(res => {
+                    setProject(res.data.project)
+                    setFileTree(res.data.project.fileTree || {})
+                })
+                .catch(() => {})
         }
 
-        axios.get('/users/all').then(res => {
+        axios.get('/users/all')
+            .then(res => setUsers(res.data.users))
+            .catch(() => {})
 
-            setUsers(res.data.users)
+    }, [project?._id, location.state?.project?._id])
 
-        }).catch(err => {
-
-            console.log(err)
-
-        })
-
-    }, [project?._id])
-
-    function saveFileTree(ft) {
-        axios.put('/projects/update-file-tree', {
-            projectId: project._id,
-            fileTree: ft
-        }).then(res => {
-            console.log(res.data)
-        }).catch(err => {
-            console.log(err)
-        })
-    }
-
-
-    // Removed appendIncomingMessage and appendOutgoingMessage functions
-
-    function scrollToBottom() {
+    useEffect(() => {
         if (messageBox.current) {
             messageBox.current.scrollTop = messageBox.current.scrollHeight
         }
-    }
-
-    // Auto-scroll to bottom when new messages arrive
-    useEffect(() => {
-        scrollToBottom()
     }, [messages])
+
+    if (!project) {
+        return (
+            <main className='h-screen w-screen flex items-center justify-center bg-gray-100'>
+                <div className="text-gray-600">No project selected</div>
+            </main>
+        )
+    }
 
     return (
         <main className='h-screen w-screen flex'>
             <section className="left relative flex flex-col h-screen min-w-96 bg-slate-300">
-                <header className='flex justify-between items-center p-2 px-4 w-full bg-slate-100 absolute z-10 top-0'>
-                    <button className='flex gap-2' onClick={() => setIsModalOpen(true)}>
-                        <i className="ri-add-fill mr-1"></i>
+                <header className='flex justify-between items-center p-3 px-4 w-full bg-gradient-to-r from-slate-100 to-slate-50 border-b border-slate-200 absolute z-10 top-0 shadow-sm'>
+                    <button 
+                        className='flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-medium hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 hover:scale-105 active:scale-95 shadow-md hover:shadow-lg' 
+                        onClick={() => setIsModalOpen(true)}>
+                        <i className="ri-add-fill text-lg"></i>
                         <p>Add collaborator</p>
                     </button>
-                    <button onClick={() => setIsSidePanelOpen(!isSidePanelOpen)} className='p-2'>
-                        <i className="ri-group-fill"></i>
+                    <button 
+                        onClick={() => setIsSidePanelOpen(!isSidePanelOpen)} 
+                        className='p-2.5 rounded-lg bg-white hover:bg-slate-100 transition-all duration-200 hover:scale-110 active:scale-95 shadow-sm hover:shadow-md border border-slate-200'>
+                        <i className="ri-group-fill text-lg text-gray-700"></i>
                     </button>
                 </header>
+                
                 <div className="conversation-area pt-14 pb-10 grow flex flex-col h-full relative">
-
                     <div
                         ref={messageBox}
                         className="message-box p-1 grow flex flex-col gap-1 overflow-auto max-h-full scrollbar-hide">
                         {messages.map((msg, index) => (
-                            <div key={index} className={`${msg.sender._id === 'ai' ? 'max-w-80' : 'max-w-52'} ${msg.sender._id == user._id.toString() && 'ml-auto'}  message flex flex-col p-2 bg-slate-50 w-fit rounded-md`}>
-                                <small className='opacity-65 text-xs text-gray-700'>{msg.sender.email}</small>
-                                <div className='text-sm'>
+                            <div 
+                                key={index} 
+                                className={`${msg.sender._id === 'ai' ? 'max-w-80' : 'max-w-52'} ${msg.sender._id === user._id.toString() && 'ml-auto'} message flex flex-col p-3 w-fit rounded-xl shadow-md hover:shadow-lg transition-all duration-200 ${
+                                    msg.sender._id === 'ai' 
+                                        ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200' 
+                                        : msg.sender._id === user._id.toString()
+                                        ? 'bg-gradient-to-br from-indigo-500 to-blue-600 text-white'
+                                        : 'bg-white border border-slate-200'
+                                }`}>
+                                <small className={`text-xs font-medium mb-1 ${
+                                    msg.sender._id === user._id.toString() ? 'text-white/90' : 'text-gray-600'
+                                }`}>
+                                    {msg.sender.email}
+                                </small>
+                                <div className={`text-sm ${
+                                    msg.sender._id === user._id.toString() ? 'text-white' : 'text-gray-900'
+                                }`}>
                                     {msg.sender._id === 'ai' ?
                                         WriteAiMessage(msg.message)
-                                        : <p className='text-gray-900'>{msg.message}</p>}
+                                        : <p>{msg.message}</p>}
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    <div className="inputField w-full flex absolute bottom-0">
+                    <div className="inputField w-full flex absolute bottom-0 bg-white border-t border-slate-200 shadow-lg">
                         <input
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
-                            className='p-2 px-4 border-none outline-none grow' type="text" placeholder='Enter message' />
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault()
+                                    send()
+                                }
+                            }}
+                            className='p-3 px-4 border-none outline-none grow bg-transparent text-gray-800 placeholder-gray-400' 
+                            type="text" 
+                            placeholder='Type your message...' />
                         <button
                             onClick={send}
-                            className='px-5 bg-slate-950 text-white'><i className="ri-send-plane-fill"></i></button>
+                            disabled={!message.trim()}
+                            className='px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95 shadow-md'>
+                            <i className="ri-send-plane-fill text-lg"></i>
+                        </button>
                     </div>
                 </div>
-                <div className={`sidePanel w-full h-full flex flex-col gap-2 bg-slate-50 absolute transition-all ${isSidePanelOpen ? 'translate-x-0' : '-translate-x-full'} top-0`}>
+
+                <div className={`sidePanel w-full h-full flex flex-col gap-2 bg-slate-50 absolute transition-all ${isSidePanelOpen ? 'translate-x-0' : '-translate-x-full'} top-0 z-20`}>
                     <header className='flex justify-between items-center px-4 p-2 bg-slate-200'>
-
-                        <h1
-                            className='font-semibold text-lg'
-                        >Collaborators</h1>
-
-                        <button onClick={() => setIsSidePanelOpen(!isSidePanelOpen)} className='p-2'>
-                            <i className="ri-close-fill"></i>
+                        <h1 className='font-semibold text-lg'>Collaborators</h1>
+                        <button onClick={() => setIsSidePanelOpen(!isSidePanelOpen)} className='p-2 hover:bg-slate-300 rounded transition-colors'>
+                            <i className="ri-close-fill text-xl text-gray-700"></i>
                         </button>
                     </header>
                     <div className="users flex flex-col gap-2">
-
-                        {project.users && project.users.map(user => {
-
-
-                            return (
-                                <div className="user cursor-pointer hover:bg-slate-200 p-2 flex gap-2 items-center">
-                                    <div className='aspect-square rounded-full w-fit h-fit flex items-center justify-center p-5 text-white bg-slate-600'>
-                                        <i className="ri-user-fill absolute"></i>
-                                    </div>
-                                    <h1 className='font-semibold text-lg'>{user.email}</h1>
+                        {project.users?.map((user, index) => (
+                            <div key={index} className="user cursor-pointer hover:bg-slate-200 p-2 flex gap-2 items-center">
+                                <div className='w-10 h-10 rounded-full flex items-center justify-center text-white bg-gradient-to-br from-slate-600 to-slate-700 shadow-md'>
+                                    <i className="ri-user-fill text-lg"></i>
                                 </div>
-                            )
-
-
-                        })}
+                                <h1 className='font-semibold text-lg'>{user.email}</h1>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </section>
 
-            <section className="right  bg-red-50 grow h-full flex">
-
-                <div className="explorer h-full max-w-64 min-w-52 bg-slate-200">
-                    <div className="file-tree w-full">
-                        {
-                            Object.keys(fileTree).map((file, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => {
-                                        setCurrentFile(file)
-                                        setOpenFiles([ ...new Set([ ...openFiles, file ]) ])
-                                    }}
-                                    className="tree-element cursor-pointer p-2 px-4 flex items-center gap-2 bg-slate-300 w-full">
-                                    <p
-                                        className='font-semibold text-lg'
-                                    >{file}</p>
-                                </button>))
-
-                        }
-                    </div>
-
-                </div>
-
-
+            <section className="right bg-red-50 grow h-full flex">
                 <div className="code-editor flex flex-col grow h-full shrink">
-
-                    <div className="top flex justify-between w-full">
-
-                        <div className="files flex">
-                            {
-                                openFiles.map((file, index) => (
-                                    <button
-                                        key={index}
-                                        onClick={() => setCurrentFile(file)}
-                                        className={`open-file cursor-pointer p-2 px-4 flex items-center w-fit gap-2 bg-slate-300 ${currentFile === file ? 'bg-slate-400' : ''}`}>
-                                        <p
-                                            className='font-semibold text-lg'
-                                        >{file}</p>
-                                    </button>
-                                ))
-                            }
-                        </div>
-
-                        <div className="actions flex gap-2">
-                            <button
-                                onClick={async () => {
-                                    await webContainer.mount(fileTree)
-
-
-                                    const installProcess = await webContainer.spawn("npm", [ "install" ])
-
-
-
-                                    installProcess.output.pipeTo(new WritableStream({
-                                        write(chunk) {
-                                            console.log(chunk)
-                                        }
-                                    }))
-
-                                    if (runProcess) {
-                                        runProcess.kill()
-                                    }
-
-                                    let tempRunProcess = await webContainer.spawn("npm", [ "start" ]);
-
-                                    tempRunProcess.output.pipeTo(new WritableStream({
-                                        write(chunk) {
-                                            console.log(chunk)
-                                        }
-                                    }))
-
-                                    setRunProcess(tempRunProcess)
-
-                                    webContainer.on('server-ready', (port, url) => {
-                                        console.log(port, url)
-                                        setIframeUrl(url)
-                                    })
-
-                                }}
-                                className='p-2 px-4 bg-slate-300 text-white'
-                            >
-                                run
-                            </button>
-
-
-                        </div>
+                    <div className="w-full h-full overflow-hidden">
+                        <CodePlayground />
                     </div>
-                    <div className="bottom flex grow max-w-full shrink overflow-auto">
-                        {
-                            fileTree[ currentFile ] && (
-                                <div className="code-editor-area h-full overflow-auto grow bg-slate-50">
-                                    <pre
-                                        className="hljs h-full">
-                                        <code
-                                            className="hljs h-full outline-none"
-                                            contentEditable
-                                            suppressContentEditableWarning
-                                            onBlur={(e) => {
-                                                const updatedContent = e.target.innerText;
-                                                const ft = {
-                                                    ...fileTree,
-                                                    [ currentFile ]: {
-                                                        file: {
-                                                            contents: updatedContent
-                                                        }
-                                                    }
-                                                }
-                                                setFileTree(ft)
-                                                saveFileTree(ft)
-                                            }}
-                                            dangerouslySetInnerHTML={{ __html: hljs.highlight('javascript', fileTree[ currentFile ].file.contents).value }}
-                                            style={{
-                                                whiteSpace: 'pre-wrap',
-                                                paddingBottom: '25rem',
-                                                counterSet: 'line-numbering',
-                                            }}
-                                        />
-                                    </pre>
-                                </div>
-                            )
-                        }
-                    </div>
-
                 </div>
-
-                {iframeUrl && webContainer &&
-                    (<div className="flex min-w-96 flex-col h-full">
-                        <div className="address-bar">
-                            <input type="text"
-                                onChange={(e) => setIframeUrl(e.target.value)}
-                                value={iframeUrl} className="w-full p-2 px-4 bg-slate-200" />
-                        </div>
-                        <iframe src={iframeUrl} className="w-full h-full"></iframe>
-                    </div>)
-                }
-
-
             </section>
 
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white p-4 rounded-md w-96 max-w-full relative">
                         <header className='flex justify-between items-center mb-4'>
                             <h2 className='text-xl font-semibold'>Select User</h2>
-                            <button onClick={() => setIsModalOpen(false)} className='p-2'>
-                                <i className="ri-close-fill"></i>
+                            <button onClick={() => setIsModalOpen(false)} className='p-2 hover:bg-gray-100 rounded transition-colors'>
+                                <i className="ri-close-fill text-xl text-gray-700"></i>
                             </button>
                         </header>
                         <div className="users-list flex flex-col gap-2 mb-16 max-h-96 overflow-auto">
                             {users.map(user => (
-                                <div key={user.id} className={`user cursor-pointer hover:bg-slate-200 ${Array.from(selectedUserId).indexOf(user._id) != -1 ? 'bg-slate-200' : ""} p-2 flex gap-2 items-center`} onClick={() => handleUserClick(user._id)}>
-                                    <div className='aspect-square relative rounded-full w-fit h-fit flex items-center justify-center p-5 text-white bg-slate-600'>
-                                        <i className="ri-user-fill absolute"></i>
+                                <div 
+                                    key={user._id} 
+                                    className={`user cursor-pointer hover:bg-slate-200 ${selectedUserId.has(user._id) ? 'bg-slate-200' : ""} p-2 flex gap-2 items-center`} 
+                                    onClick={() => handleUserClick(user._id)}>
+                                    <div className='w-10 h-10 rounded-full flex items-center justify-center text-white bg-gradient-to-br from-slate-600 to-slate-700 shadow-md'>
+                                        <i className="ri-user-fill text-lg"></i>
                                     </div>
                                     <h1 className='font-semibold text-lg'>{user.email}</h1>
                                 </div>
@@ -567,7 +495,7 @@ const Project = () => {
                         </div>
                         <button
                             onClick={addCollaborators}
-                            className='absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-blue-600 text-white rounded-md'>
+                            className='absolute bottom-4 left-1/2 transform -translate-x-1/2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl'>
                             Add Collaborators
                         </button>
                     </div>
